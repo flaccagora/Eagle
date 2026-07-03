@@ -46,6 +46,11 @@ def parse_args() -> argparse.Namespace:
         help="Keep every Nth annotated frame per video. The first annotated frame is always kept.",
     )
     parser.add_argument(
+        "--data-augment",
+        action="store_true",
+        help="Enable LocateAnything resize augmentation in the generated recipe. Disabled by default for EndoVis to avoid image-token truncation.",
+    )
+    parser.add_argument(
         "--skip-frame-extraction",
         action="store_true",
         help="Only write JSONL/recipe files. Use if frames already exist.",
@@ -263,7 +268,7 @@ def main() -> None:
             "annotation": str(train_jsonl.resolve()),
             "root": str(image_root.resolve()),
             "repeat_time": 1.0,
-            "data_augment": True,
+            "data_augment": args.data_augment,
         }
     }
     recipe_path.write_text(json.dumps(recipe, indent=2) + "\n", encoding="utf-8")
@@ -273,6 +278,7 @@ def main() -> None:
     print(f"Wrote recipe: {recipe_path}")
     print(f"Referenced {total_frames} frames under: {image_root}")
     print(f"Frame stride: {args.frame_stride}")
+    print(f"Data augmentation: {args.data_augment}")
     if args.collapse_class:
         print(f"Collapsed all categories to: {args.collapsed_label}")
 
