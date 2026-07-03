@@ -43,7 +43,10 @@ from eaglevl.patch import (
     replace_train_dataloader,
     replace_train_sampler
 )
-from eaglevl.model.locany.modeling_locateanything import LocateAnythingForConditionalGeneration
+from eaglevl.model.locany.modeling_locateanything import (
+    LocateAnythingForConditionalGeneration,
+    get_vision_attn_implementation,
+)
 from eaglevl.model.locany.configuration_locateanything import LocateAnythingConfig
 from eaglevl.utils.locany.processing_locateanything import LocateAnythingProcessor
 from eaglevl.utils.locany.image_processing_locateanything import LocateAnythingImageProcessor
@@ -1334,9 +1337,10 @@ def main():
         config._attn_implementation_autoset = False
         config.text_config._attn_implementation = model_args.attn_implementation
         config.text_config._attn_implementation_autoset = False
-        config.vision_config._attn_implementation = 'flash_attention_2'
+        vision_attn_implementation = get_vision_attn_implementation()
+        config.vision_config._attn_implementation = vision_attn_implementation
         config.vision_config._attn_implementation_autoset = False
-        logger.info(f'Text attn: {model_args.attn_implementation}, Vision attn: flash_attention_2')
+        logger.info(f'Text attn: {model_args.attn_implementation}, Vision attn: {vision_attn_implementation}')
 
         config.image_token_index = image_token_index
         config.text_config.block_size = int(model_args.block_size)
@@ -1379,7 +1383,7 @@ def main():
 
         if vision_config.model_type == 'moonvit':
             logger.info('Loading MoonVit...')
-            vision_config._attn_implementation = 'flash_attention_2'
+            vision_config._attn_implementation = get_vision_attn_implementation()
             vision_model = MoonVitPretrainedModel.from_pretrained(
                 model_args.vision_path, torch_dtype=torch.bfloat16, config=vision_config)
         else:

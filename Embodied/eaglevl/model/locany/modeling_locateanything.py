@@ -5,6 +5,7 @@
 # --------------------------------------------------------
 
 import warnings
+import os
 from collections import defaultdict
 from typing import Any, List, Optional, Tuple, Union
 import numpy as np
@@ -23,7 +24,7 @@ from transformers.generation import GenerationMixin
 from transformers import GenerationConfig
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from transformers.modeling_utils import PreTrainedModel
-from transformers.utils import ModelOutput, logging
+from transformers.utils import ModelOutput, is_flash_attn_2_available, logging
 from .configuration_locateanything import LocateAnythingConfig
 from transformers.utils import add_start_docstrings, add_start_docstrings_to_model_forward, logging, replace_return_docstrings
 from eaglevl.sp_utils import  (get_pg_manager, ring_split_for_sequence_parallel)
@@ -31,6 +32,16 @@ from eaglevl.train.liger_loss_weight_ops import LigerFusedLinearCrossEntropyLoss
 
 
 logger = logging.get_logger(__name__)
+
+
+def get_vision_attn_implementation() -> str:
+    requested = os.environ.get("LOCANY_VISION_ATTN")
+    if requested:
+        if requested == "flash_attention_2" and not is_flash_attn_2_available():
+            logger.warning("LOCANY_VISION_ATTN=flash_attention_2 requested, but flash_attn is not installed. Falling back to sdpa.")
+            return "sdpa"
+        return requested
+    return "flash_attention_2" if is_flash_attn_2_available() else "sdpa"
 
 
 # copy from https://github.com/huggingface/transformers/blob/main/src/transformers/models/llava_onevision/modeling_llava_onevision.py#L241C1-L280C1
@@ -92,7 +103,7 @@ class LocateAnythingForConditionalGeneration(LocateAnythingPreTrainedModel, Gene
             self.vision_model = vision_model
         else:
             if config.vision_config.model_type == 'moonvit':
-                config.vision_config._attn_implementation = 'flash_attention_2'
+                config.vision_config._attn_implementation = get_vision_attn_implementation()
                 self.vision_model = MoonVitPretrainedModel(config.vision_config)
             else:
                 raise ValueError(f'Unsupported vision model type: {config.vision_config.model_type}. Only moonvit is supported.')

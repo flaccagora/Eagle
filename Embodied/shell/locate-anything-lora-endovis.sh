@@ -15,6 +15,7 @@ MODEL_PATH=${MODEL_PATH:-"nvidia/LocateAnything-3B"}
 META_PATH=${META_PATH:-"../data/endovis_locany/endovis_recipe.json"}
 DEEPSPEED_CONFIG=${DEEPSPEED_CONFIG:-"deepspeed_configs/zero_stage1_config.json"}
 ATTN_IMPLEMENTATION=${ATTN_IMPLEMENTATION:-"sdpa"}
+LOCANY_VISION_ATTN=${LOCANY_VISION_ATTN:-"sdpa"}
 
 PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
 GRADIENT_ACC=${GRADIENT_ACC:-1}
@@ -42,6 +43,7 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 export NCCL_DEBUG="${NCCL_DEBUG:-WARN}"
+export LOCANY_VISION_ATTN
 export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-true}"
 
 python -m torch.distributed.run \

@@ -33,6 +33,7 @@ ml load cuda/12.2
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 export TOKENIZERS_PARALLELISM=true
 export NCCL_DEBUG="${NCCL_DEBUG:-WARN}"
+export LOCANY_VISION_ATTN="${LOCANY_VISION_ATTN:-sdpa}"
 
 echo "Working directory: $WORKDIR"
 cd "$WORKDIR"
@@ -47,6 +48,7 @@ echo "  META_PATH=$META_PATH"
 echo "  OUTPUT_DIR=$OUTPUT_DIR"
 echo "  HF_HOME=$HF_HOME"
 echo "  HF_HUB_OFFLINE=$HF_HUB_OFFLINE"
+echo "  LOCANY_VISION_ATTN=$LOCANY_VISION_ATTN"
 
 test -f "$META_PATH"
 
