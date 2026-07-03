@@ -17,7 +17,7 @@ date
 
 # Adjust these paths for the cluster checkout and environment.
 WORKDIR="${WORKDIR:-/leonardo_work/IscrC_FLAC/Eagle}"
-VENV_PATH="${VENV_PATH:-$WORKDIR/.venv}"
+VENV_PATH="${VENV_PATH:-$WORKDIR/Embodied/.venv}"
 # HF_HOME="${HF_HOME:-/leonardo_scratch/large/userexternal/mnunzian/HF_DOWNLOADS}"
 
 # Use a local checkpoint path here if LocateAnything is not already cached in HF_HOME.
