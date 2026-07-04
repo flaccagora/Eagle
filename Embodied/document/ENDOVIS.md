@@ -371,6 +371,45 @@ thresholds:
 `per_iou_metrics.json` stores AP, AR, and F1 per threshold. `map_over_iou.png`
 plots AP and AR over those IoU thresholds.
 
+### Diagnose Low mAP
+
+Use the analyzer to separate count errors from localization errors:
+
+```bash
+cd Embodied
+
+python tools/analyze_endovis_eval_results.py \
+  --metrics-json work_dirs/locany_lora_endovis_single/eval_val/hybrid/eval_results.json \
+  --pred-jsonl work_dirs/locany_lora_endovis_single/eval_val_map/hybrid/eval_results.jsonl \
+  --gt-jsonl ../data/endovis_locany_single/annotations/endovis_val_eval.jsonl \
+  --image-root ../data/endovis_locany_single/images \
+  --out-dir work_dirs/locany_lora_endovis_single/eval_analysis \
+  --draw-overlays
+```
+
+Outputs:
+
+```text
+work_dirs/locany_lora_endovis_single/eval_analysis/
+├── summary.md
+├── summary.json
+├── threshold_metrics.csv
+├── raw_threshold_metrics.csv
+├── sample_errors.csv
+├── box_diagnostics.csv
+├── best_iou_histogram.png
+├── center_offset_scatter.png
+├── scale_bias_histograms.png
+├── per_video_metrics.png
+├── count_error_histogram.png
+└── failure_montage/
+```
+
+`sample_errors.csv` is the fastest place to inspect bad frames. It labels
+failure modes such as `empty_prediction`, `missed_gt`, `false_positive`,
+`count_under`, `count_over`, `duplicate_prediction`, `low_iou_localization`,
+and `good_at_50_bad_at_75`.
+
 ### Evaluate Multiple Checkpoints
 
 Example loop:
