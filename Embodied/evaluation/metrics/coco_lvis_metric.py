@@ -7,6 +7,8 @@
 # license agreement from NVIDIA CORPORATION is strictly prohibited.
 
 import argparse
+import json
+import os
 
 import fastevaluate as fe
 import numpy as np
@@ -36,6 +38,139 @@ def format_table(rows, headers):
     return "\n".join(lines)
 
 
+def normalize_category_name(name):
+    return str(name).lower().replace("_", " ")
+
+
+def load_tsv_as_coco_detections(gt_path, pred_tsv_path):
+    from pycocotools.coco import COCO
+
+    coco_gt = COCO(gt_path)
+    name_to_id = {
+        normalize_category_name(cat["name"]): cat_id
+        for cat_id, cat in coco_gt.cats.items()
+    }
+
+    detections = []
+    with open(pred_tsv_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            try:
+                image_id_str, payload = line.split("\t", 1)
+                image_id = int(image_id_str)
+                items = json.loads(payload)
+            except Exception:
+                continue
+
+            for item in items:
+                category_name = normalize_category_name(item.get("class", ""))
+                if category_name not in name_to_id:
+                    continue
+                bbox = item.get("rect")
+                if not isinstance(bbox, list) or len(bbox) != 4:
+                    continue
+                x, y, w, h = [float(v) for v in bbox]
+                if w <= 0 or h <= 0:
+                    continue
+                detections.append(
+                    {
+                        "image_id": image_id,
+                        "category_id": name_to_id[category_name],
+                        "bbox": [x, y, w, h],
+                        "score": float(item.get("conf", 1.0)),
+                    }
+                )
+
+    return coco_gt, detections
+
+
+def calculate_cocoeval_per_iou(gt_path, pred_tsv_path):
+    from pycocotools.cocoeval import COCOeval
+
+    coco_gt, detections = load_tsv_as_coco_detections(gt_path, pred_tsv_path)
+    if not detections:
+        raise ValueError(f"No valid detections found in {pred_tsv_path}")
+
+    coco_dt = coco_gt.loadRes(detections)
+    evaluator = COCOeval(coco_gt, coco_dt, "bbox")
+    evaluator.evaluate()
+    evaluator.accumulate()
+
+    precision = evaluator.eval["precision"]
+    recall = evaluator.eval["recall"]
+    area_idx = list(evaluator.params.areaRngLbl).index("all")
+    max_det_idx = len(evaluator.params.maxDets) - 1
+
+    rows = []
+    for iou_idx, iou in enumerate(evaluator.params.iouThrs):
+        p = precision[iou_idx, :, :, area_idx, max_det_idx]
+        p = p[p > -1]
+        ap = float(np.mean(p)) if p.size else 0.0
+
+        r = recall[iou_idx, :, area_idx, max_det_idx]
+        r = r[r > -1]
+        ar = float(np.mean(r)) if r.size else 0.0
+
+        rows.append(
+            {
+                "iou": float(iou),
+                "ap": ap,
+                "ar": ar,
+                "f1": f1(ap, ar),
+            }
+        )
+    return rows
+
+
+def save_per_iou_json(rows, output_path):
+    if not output_path:
+        return
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(rows, f, indent=2)
+    print(f"Saved per-IoU metrics JSON to: {output_path}")
+
+
+def save_per_iou_plot(rows, output_path):
+    if not output_path:
+        return
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception as exc:
+        print(f"Skipping per-IoU plot because matplotlib is unavailable: {exc}")
+        return
+
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
+    ious = [row["iou"] for row in rows]
+    aps = [row["ap"] for row in rows]
+    ars = [row["ar"] for row in rows]
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.plot(ious, aps, marker="o", label="AP")
+    ax.plot(ious, ars, marker="s", label="AR")
+    ax.set_xlabel("IoU threshold")
+    ax.set_ylabel("Score")
+    ax.set_title("COCOeval AP/AR over IoU thresholds")
+    ax.set_xticks(ious)
+    ax.set_ylim(0, 1)
+    ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=160)
+    plt.close(fig)
+    print(f"Saved per-IoU plot to: {output_path}")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Evaluate COCO/LVIS predictions (FastEval)."
@@ -58,6 +193,23 @@ def parse_args():
         default="auto",
         choices=["auto", "coco", "lvis"],
         help="Evaluation type: auto (detect from filename), coco, or lvis",
+    )
+    parser.add_argument(
+        "--per_iou_json",
+        type=str,
+        default=None,
+        help="Optional path to save AP/AR/F1 at each COCO IoU threshold as JSON.",
+    )
+    parser.add_argument(
+        "--per_iou_plot",
+        type=str,
+        default=None,
+        help="Optional path to save AP/AR-over-IoU plot as PNG.",
+    )
+    parser.add_argument(
+        "--skip_per_iou",
+        action="store_true",
+        help="Disable pycocotools per-IoU table/JSON/plot generation.",
     )
     return parser.parse_args()
 
@@ -115,6 +267,31 @@ def main():
     ]
 
     print(format_table(rows, headers))
+
+    if args.skip_per_iou:
+        return
+
+    try:
+        per_iou_rows = calculate_cocoeval_per_iou(args.gt, args.pred_tsv)
+    except Exception as exc:
+        print(f"\nSkipping per-IoU COCOeval metrics: {exc}")
+        print("Install pycocotools to enable this table/plot if it is missing.")
+        return
+
+    per_iou_table = [
+        [
+            f"{row['iou']:.2f}",
+            f"{row['ap']:.4f}",
+            f"{row['ar']:.4f}",
+            f"{row['f1']:.4f}",
+        ]
+        for row in per_iou_rows
+    ]
+    print("\nPer-IoU COCOeval metrics")
+    print(format_table(per_iou_table, ["IoU", "AP", "AR", "F1"]))
+
+    save_per_iou_json(per_iou_rows, args.per_iou_json)
+    save_per_iou_plot(per_iou_rows, args.per_iou_plot)
 
 
 if __name__ == "__main__":

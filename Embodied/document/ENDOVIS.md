@@ -351,12 +351,25 @@ Outputs:
 work_dirs/locany_lora_endovis_single/eval_val_map/hybrid/
 ├── eval_results.jsonl
 ├── fast_eval.tsv
+├── per_iou_metrics.json
+├── map_over_iou.png
 └── evaluation_log_*.txt
 ```
 
 For collapsed single-class EndoVis, `endovis_val_coco.json` contains one COCO
 category: `surgical instrument wrist`. AP is therefore single-class AP, not an
 average over the original EndoVis tool-type classes.
+
+The AP/mAP script also prints and saves the AP curve over the standard COCO IoU
+thresholds:
+
+```text
+0.50, 0.55, 0.60, 0.65, 0.70,
+0.75, 0.80, 0.85, 0.90, 0.95
+```
+
+`per_iou_metrics.json` stores AP, AR, and F1 per threshold. `map_over_iou.png`
+plots AP and AR over those IoU thresholds.
 
 ### Evaluate Multiple Checkpoints
 

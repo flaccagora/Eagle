@@ -66,6 +66,8 @@ else
 fi
 SAVE_PATH="$OUTPUT_DIR/eval_results.jsonl"
 FASTEVAL_TSV="$OUTPUT_DIR/fast_eval.tsv"
+PER_IOU_JSON="$OUTPUT_DIR/per_iou_metrics.json"
+PER_IOU_PLOT="$OUTPUT_DIR/map_over_iou.png"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="$OUTPUT_DIR/evaluation_log_${TIMESTAMP}.txt"
 
@@ -169,7 +171,9 @@ echo "=========================================="
 
 python "$EVAL_DIR/metrics/coco_lvis_metric.py" \
     --gt "$COCO_JSON" \
-    --pred_tsv "$FASTEVAL_TSV"
+    --pred_tsv "$FASTEVAL_TSV" \
+    --per_iou_json "$PER_IOU_JSON" \
+    --per_iou_plot "$PER_IOU_PLOT"
 
 EVAL_EXIT_CODE=$?
 if [ $EVAL_EXIT_CODE -ne 0 ]; then
@@ -195,5 +199,7 @@ echo "COCO Evaluation Pipeline completed!"
 echo "=========================================="
 echo "  Predictions: $SAVE_PATH"
 echo "  FastEval TSV: $FASTEVAL_TSV"
+echo "  Per-IoU JSON: $PER_IOU_JSON"
+echo "  Per-IoU Plot: $PER_IOU_PLOT"
 echo "  Log: $LOG_FILE"
 echo "=========================================="
