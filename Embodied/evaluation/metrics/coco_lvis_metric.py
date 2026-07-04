@@ -15,7 +15,7 @@ import numpy as np
 
 
 def safe_mean(values):
-    vals = [v for v in values if v > 0]
+    vals = [v for v in values if v >= 0 and np.isfinite(v)]
     return float(np.mean(vals)) if len(vals) > 0 else 0.0
 
 
@@ -238,44 +238,59 @@ def main():
 
     res = fe.evaluate(args.gt, args.pred_tsv, 0, 0, eval_type)
 
-    # Basic means
-    avg_precision = safe_mean(res.get("precision", []))
-    avg_recall = safe_mean(res.get("recall", []))
-    avg_f1 = f1(avg_precision, avg_recall)
+    per_iou_rows = None
+    if args.skip_per_iou:
+        print("\nSkipping per-IoU COCOeval metrics because --skip_per_iou was set.")
+    else:
+        try:
+            per_iou_rows = calculate_cocoeval_per_iou(args.gt, args.pred_tsv)
+        except Exception as exc:
+            print(f"\nSkipping per-IoU COCOeval metrics: {exc}")
+            print("Install pycocotools to enable this table/plot if it is missing.")
 
-    # IoU=0.50
-    precision50 = safe_mean(res.get("precision50", []))
-    recall50 = safe_mean(res.get("recall50", []))
-    f1_50 = f1(precision50, recall50)
-
-    # IoU=0.95
-    precision95 = safe_mean(res.get("precision95", []))
-    recall95 = safe_mean(res.get("recall95", []))
-    f1_95 = f1(precision95, recall95)
+    if per_iou_rows:
+        map_value = float(np.mean([row["ap"] for row in per_iou_rows]))
+        mar_value = float(np.mean([row["ar"] for row in per_iou_rows]))
+        ap50 = next(row["ap"] for row in per_iou_rows if round(row["iou"], 2) == 0.50)
+        ar50 = next(row["ar"] for row in per_iou_rows if round(row["iou"], 2) == 0.50)
+        ap95 = next(row["ap"] for row in per_iou_rows if round(row["iou"], 2) == 0.95)
+        ar95 = next(row["ar"] for row in per_iou_rows if round(row["iou"], 2) == 0.95)
+        summary_source = "pycocotools COCOeval"
+    else:
+        map_value = safe_mean(res.get("ap", []))
+        mar_value = safe_mean(res.get("recall", []))
+        ap50 = safe_mean(res.get("ap50", []))
+        ar50 = safe_mean(res.get("recall50", []))
+        ap95 = None
+        ar95 = safe_mean(res.get("recall95", []))
+        summary_source = "FastEvaluate fallback"
 
     headers = ["Metric", "Value"]
     rows = [
-        ["Avg Precision", f"{avg_precision:.4f}"],
-        ["Avg Recall", f"{avg_recall:.4f}"],
-        ["Avg F1", f"{avg_f1:.4f}"],
-        ["Precision@0.50", f"{precision50:.4f}"],
-        ["Recall@0.50", f"{recall50:.4f}"],
-        ["F1@0.50", f"{f1_50:.4f}"],
-        ["Precision@0.95", f"{precision95:.4f}"],
-        ["Recall@0.95", f"{recall95:.4f}"],
-        ["F1@0.95", f"{f1_95:.4f}"],
+        ["Source", summary_source],
+        ["mAP@[.50:.95]", f"{map_value:.4f}"],
+        ["mAR@[.50:.95]", f"{mar_value:.4f}"],
+        ["F1(mAP,mAR)", f"{f1(map_value, mar_value):.4f}"],
+        ["AP@0.50", f"{ap50:.4f}"],
+        ["AR@0.50", f"{ar50:.4f}"],
+        ["F1@0.50", f"{f1(ap50, ar50):.4f}"],
+        ["AP@0.95", "n/a" if ap95 is None else f"{ap95:.4f}"],
+        ["AR@0.95", f"{ar95:.4f}"],
+        ["F1@0.95", "n/a" if ap95 is None else f"{f1(ap95, ar95):.4f}"],
     ]
 
     print(format_table(rows, headers))
 
-    if args.skip_per_iou:
-        return
+    legacy_rows = [
+        ["FastEval ap", f"{safe_mean(res.get('ap', [])):.4f}"],
+        ["FastEval ap50", f"{safe_mean(res.get('ap50', [])):.4f}"],
+        ["FastEval endpoint precision50", f"{safe_mean(res.get('precision50', [])):.4f}"],
+        ["FastEval endpoint recall50", f"{safe_mean(res.get('recall50', [])):.4f}"],
+    ]
+    print("\nFastEvaluate raw summary fields")
+    print(format_table(legacy_rows, ["Field", "Value"]))
 
-    try:
-        per_iou_rows = calculate_cocoeval_per_iou(args.gt, args.pred_tsv)
-    except Exception as exc:
-        print(f"\nSkipping per-IoU COCOeval metrics: {exc}")
-        print("Install pycocotools to enable this table/plot if it is missing.")
+    if not per_iou_rows:
         return
 
     per_iou_table = [
