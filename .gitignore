@@ -1,3 +1,6 @@
+# endovis
+data/
+work_dirs/
 # Python
 __pycache__
 *.pyc
