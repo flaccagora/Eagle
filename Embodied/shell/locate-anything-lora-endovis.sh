@@ -34,7 +34,14 @@ USE_BACKBONE_LORA=${USE_BACKBONE_LORA:-0}
 FREEZE_LLM=${FREEZE_LLM:-True}
 FREEZE_BACKBONE=${FREEZE_BACKBONE:-True}
 FREEZE_MLP=${FREEZE_MLP:-False}
-REPORT_TO=${REPORT_TO:-"tensorboard"}
+REPORT_TO=${REPORT_TO:-"wandb"}
+
+WANDB_MODE=${WANDB_MODE:-"offline"}
+WANDB_PROJECT=${WANDB_PROJECT:-"locany-endovis"}
+WANDB_RUN_ID=${WANDB_RUN_ID:-"locany-lora-endovis"}
+WANDB_NAME=${WANDB_NAME:-"$WANDB_RUN_ID"}
+WANDB_RESUME=${WANDB_RESUME:-"allow"}
+WANDB_DIR=${WANDB_DIR:-"$OUTPUT_DIR/wandb"}
 
 if [[ ! -f "$META_PATH" ]]; then
   echo "Missing META_PATH=$META_PATH. Run tools/prepare_endovis_locany.py first." >&2
@@ -42,9 +49,11 @@ if [[ ! -f "$META_PATH" ]]; then
 fi
 
 mkdir -p "$OUTPUT_DIR"
+mkdir -p "$WANDB_DIR"
 export NCCL_DEBUG="${NCCL_DEBUG:-WARN}"
 export LOCANY_VISION_ATTN
 export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-true}"
+export WANDB_MODE WANDB_PROJECT WANDB_RUN_ID WANDB_NAME WANDB_RESUME WANDB_DIR
 
 python -m torch.distributed.run \
   --nnodes="$NNODES" \

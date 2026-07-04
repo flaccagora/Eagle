@@ -19,7 +19,7 @@ MODEL_PATH=${MODEL_PATH:-"/path/to/LocateAnything"}
 export HF_TOKEN="${HF_TOKEN:-}"
 
 # ==================== Dataset Configuration ====================
-DATASET=${DATASET:-"SROIE"} # Options: HierText, DocLayNet, HumanRef, Dense200, IC15, M6Doc, RefCOCOg_test, RefCOCOg_val, SROIE, TotalText, VisDrone, FSCD_test
+DATASET=${DATASET:-"SROIE"} # Options: EndoVis, HierText, DocLayNet, HumanRef, Dense200, IC15, M6Doc, RefCOCOg_test, RefCOCOg_val, SROIE, TotalText, VisDrone, FSCD_test
 EVAL_TYPE=${EVAL_TYPE:-"box_eval"} # Options: box_eval, point_eval,
 IMAGE_ROOT_DIR=${IMAGE_ROOT_DIR:-"path/to/EvalData/"}
 
@@ -37,7 +37,7 @@ print_help() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "  --dataset NAME        Dataset (default: SROIE)"
-    echo "                        Options: HierText, DocLayNet, HumanRef, Dense200, IC15, M6Doc,"
+    echo "                        Options: EndoVis, HierText, DocLayNet, HumanRef, Dense200, IC15, M6Doc,"
     echo "                                 RefCOCOg_test, RefCOCOg_val, SROIE, TotalText, VisDrone, FSCD_test"
     echo "  --eval_type TYPE      Evaluation type: box_eval, point_eval"
     echo "  --model_path PATH     Path to model"
@@ -84,6 +84,7 @@ fi
 case "$DATASET" in
     LVIS)           DEFAULT_JSONL="$ANNO_BASE/LVIS.jsonl";          OUTPUT_DIR="$OUTPUT_BASE/LVIS";;
     COCO)           DEFAULT_JSONL="$ANNO_BASE/COCO.jsonl";          OUTPUT_DIR="$OUTPUT_BASE/COCO";;
+    EndoVis)        DEFAULT_JSONL="$ANNO_BASE/EndoVis.jsonl";       OUTPUT_DIR="$OUTPUT_BASE/EndoVis";;
     HierText)       DEFAULT_JSONL="$ANNO_BASE/HierText.jsonl";       OUTPUT_DIR="$OUTPUT_BASE/HierText";;
     DocLayNet)      DEFAULT_JSONL="$ANNO_BASE/DocLayNet.jsonl";      OUTPUT_DIR="$OUTPUT_BASE/DocLayNet";;
     HumanRef)       DEFAULT_JSONL="$ANNO_BASE/HumanRef.jsonl";      OUTPUT_DIR="$OUTPUT_BASE/HumanRef";;
@@ -98,7 +99,7 @@ case "$DATASET" in
     FSCD_test)      DEFAULT_JSONL="$ANNO_BASE/FSCD_test.jsonl";     OUTPUT_DIR="$OUTPUT_BASE/FSCD_test";;
     *)
         echo "Unsupported dataset: $DATASET"
-        echo "Supported: LVIS, COCO, HierText, DocLayNet, HumanRef, Dense200, IC15, M6Doc, RefCOCOg_test, RefCOCOg_val, SROIE, TotalText, VisDrone, FSCD_test"
+        echo "Supported: LVIS, COCO, EndoVis, HierText, DocLayNet, HumanRef, Dense200, IC15, M6Doc, RefCOCOg_test, RefCOCOg_val, SROIE, TotalText, VisDrone, FSCD_test"
         exit 1;;
 esac
 
@@ -118,6 +119,7 @@ LOG_FILE="$OUTPUT_DIR/evaluation_log_${TIMESTAMP}.txt"
 export NCCL_DEBUG=INFO
 export NCCL_IB_DISABLE=0
 export NCCL_NET_GDR_LEVEL=2
+export LOCANY_VISION_ATTN="${LOCANY_VISION_ATTN:-sdpa}"
 
 # ==================== Print Configuration ====================
 script_name=$(basename "${BASH_SOURCE[0]}")
