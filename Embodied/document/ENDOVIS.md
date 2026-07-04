@@ -378,6 +378,21 @@ Use the analyzer to separate count errors from localization errors:
 ```bash
 cd Embodied
 
+python tools/analyze_endovis_eval_results.py
+```
+
+By default, the analyzer looks for:
+
+```text
+Embodied/work_dirs/locany_lora_endovis_single/eval_val/hybrid/eval_results.json
+Embodied/work_dirs/locany_lora_endovis_single/eval_val_map/hybrid/eval_results.jsonl
+data/endovis_locany_single/annotations/endovis_val_eval.jsonl
+data/endovis_locany_single/images
+```
+
+Use explicit paths to analyze a different run:
+
+```bash
 python tools/analyze_endovis_eval_results.py \
   --metrics-json work_dirs/locany_lora_endovis_single/eval_val/hybrid/eval_results.json \
   --pred-jsonl work_dirs/locany_lora_endovis_single/eval_val_map/hybrid/eval_results.jsonl \

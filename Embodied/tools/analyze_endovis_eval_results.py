@@ -22,6 +22,18 @@ from typing import Any
 
 IOU_THRESHOLDS = [round(0.50 + 0.05 * i, 2) for i in range(10)]
 DEFAULT_CLASS = "surgical instrument wrist"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_METRICS_JSON = (
+    REPO_ROOT / "Embodied/work_dirs/locany_lora_endovis_single/eval_val/hybrid/eval_results.json"
+)
+DEFAULT_PRED_JSONL = (
+    REPO_ROOT / "Embodied/work_dirs/locany_lora_endovis_single/eval_val_map/hybrid/eval_results.jsonl"
+)
+DEFAULT_GT_JSONL = (
+    REPO_ROOT / "data/endovis_locany_single/annotations/endovis_val_eval.jsonl"
+)
+DEFAULT_IMAGE_ROOT = REPO_ROOT / "data/endovis_locany_single/images"
+DEFAULT_OUT_DIR = REPO_ROOT / "Embodied/work_dirs/locany_lora_endovis_single/eval_analysis"
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,17 +45,24 @@ def parse_args() -> argparse.Namespace:
         "--eval-results",
         dest="metrics_json",
         default=None,
-        help="Aggregate grounding eval_results.json. If omitted, only raw prediction diagnostics run.",
+        help=(
+            "Aggregate grounding eval_results.json. Defaults to "
+            "Embodied/work_dirs/locany_lora_endovis_single/eval_val/hybrid/eval_results.json "
+            "when that file exists."
+        ),
     )
     parser.add_argument(
         "--pred-jsonl",
         default=None,
-        help="Raw prediction JSONL from inference, usually .../eval_results.jsonl.",
+        help=(
+            "Raw prediction JSONL from inference. Defaults to the standard EndoVis "
+            "eval_val_map/hybrid/eval_results.jsonl when that file exists."
+        ),
     )
     parser.add_argument(
         "--gt-jsonl",
         default=None,
-        help="EndoVis val eval JSONL, usually annotations/endovis_val_eval.jsonl.",
+        help="EndoVis val eval JSONL. Defaults to data/endovis_locany_single/annotations/endovis_val_eval.jsonl when it exists.",
     )
     parser.add_argument(
         "--coco-json",
@@ -53,11 +72,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--image-root",
         default=None,
-        help="Optional image root used to draw worst-case overlays.",
+        help="Optional image root used to draw worst-case overlays. Defaults to data/endovis_locany_single/images when it exists.",
     )
     parser.add_argument(
         "--out-dir",
-        default="analysis/endovis_eval",
+        default=str(DEFAULT_OUT_DIR),
         help="Directory for CSV/JSON/plot outputs.",
     )
     parser.add_argument(
@@ -93,6 +112,21 @@ def parse_args() -> argparse.Namespace:
         help="Draw GT/prediction overlays for the worst samples. Requires --image-root.",
     )
     return parser.parse_args()
+
+
+def existing_default(path: Path) -> str | None:
+    return str(path) if path.exists() else None
+
+
+def apply_default_paths(args: argparse.Namespace) -> None:
+    if args.metrics_json is None:
+        args.metrics_json = existing_default(DEFAULT_METRICS_JSON)
+    if args.pred_jsonl is None:
+        args.pred_jsonl = existing_default(DEFAULT_PRED_JSONL)
+    if args.gt_jsonl is None:
+        args.gt_jsonl = existing_default(DEFAULT_GT_JSONL)
+    if args.image_root is None:
+        args.image_root = existing_default(DEFAULT_IMAGE_ROOT)
 
 
 def normalize_path(path: Any) -> str:
@@ -893,6 +927,12 @@ def write_summary_markdown(
 
 def main() -> None:
     args = parse_args()
+    apply_default_paths(args)
+    if args.metrics_json is None and args.pred_jsonl is None:
+        raise SystemExit(
+            "No eval outputs found. Pass --metrics-json and/or --pred-jsonl, or run the "
+            "standard EndoVis eval first."
+        )
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
