@@ -28,6 +28,7 @@ OUTPUT_DIR="${OUTPUT_DIR:-work_dirs/locany_lora_endovis_single}"
 echo "Loading necessary modules"
 ml purge
 ml load cuda/12.2
+ml load gcc/12.2.0
 
 # export HF_HOME
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
