@@ -87,6 +87,11 @@ def response_for_instances(instances: list[tuple[str, tuple[int, int, int, int]]
     return "".join(f"<ref>{name}</ref>{box_text(box)}" for name, box in instances)
 
 
+def absolute_box(bbox: list[float]) -> list[float]:
+    x, y, w, h = bbox
+    return [x, y, x + w, y + h]
+
+
 def extract_frames(video_path: Path, output_dir: Path, frame_names: set[str], overwrite: bool) -> None:
     import cv2
 
@@ -126,7 +131,7 @@ def make_samples(
     collapse_class: bool,
     collapsed_label: str,
     frame_stride: int,
-) -> tuple[list[dict], set[str]]:
+) -> tuple[list[dict], set[str], list[dict]]:
     data = json.loads(coco_path.read_text())
     video_stem = coco_path.name.removesuffix("_coco.json")
     categories = {cat["id"]: cat["name"] for cat in data["categories"]}
@@ -138,6 +143,7 @@ def make_samples(
         anns_by_image[ann["image_id"]].append(ann)
 
     samples = []
+    eval_entries = []
     frame_names = set()
     image_ids = sorted(
         anns_by_image,
@@ -154,12 +160,24 @@ def make_samples(
         frame_names.add(image["file_name"])
 
         instances = []
+        gt_by_category: dict[str, list[list[float]]] = defaultdict(list)
         by_category: dict[str, list[tuple[int, int, int, int]]] = defaultdict(list)
         for ann in anns:
             name = collapsed_label if collapse_class else categories[ann["category_id"]]
             box = convert_box(ann["bbox"], width, height)
             instances.append((name, box))
             by_category[name].append(box)
+            gt_by_category[name].append(absolute_box(ann["bbox"]))
+
+        eval_entries.append(
+            {
+                "image_path": rel_image,
+                "categories": sorted(by_category),
+                "gt": {category: boxes for category, boxes in sorted(gt_by_category.items())},
+                "dataset_name": "EndoVis",
+                "task_name": "referring_object_detection",
+            }
+        )
 
         if "detection" in modes:
             category_prompt = "</c>".join(sorted(by_category))
@@ -198,7 +216,7 @@ def make_samples(
                     }
                 )
 
-    return samples, frame_names
+    return samples, frame_names, eval_entries
 
 
 def write_jsonl(path: Path, samples: list[dict]) -> None:
@@ -226,6 +244,7 @@ def main() -> None:
 
     train_samples: list[dict] = []
     val_samples: list[dict] = []
+    val_eval_entries: list[dict] = []
     total_frames = 0
 
     coco_paths = sorted(glob.glob(str(endovis_dir / "*_fps1_coco.json")))
@@ -235,7 +254,7 @@ def main() -> None:
     for coco_str in coco_paths:
         coco_path = Path(coco_str)
         video_stem = coco_path.name.removesuffix("_coco.json")
-        samples, frame_names = make_samples(
+        samples, frame_names, eval_entries = make_samples(
             coco_path,
             modes,
             collapse_class=args.collapse_class,
@@ -244,6 +263,7 @@ def main() -> None:
         )
         if video_stem in val_videos:
             val_samples.extend(samples)
+            val_eval_entries.extend(eval_entries)
         else:
             train_samples.extend(samples)
 
@@ -259,9 +279,11 @@ def main() -> None:
 
     train_jsonl = ann_dir / "endovis_train.jsonl"
     val_jsonl = ann_dir / "endovis_val.jsonl"
+    val_eval_jsonl = ann_dir / "endovis_val_eval.jsonl"
     recipe_path = output_dir / "endovis_recipe.json"
     write_jsonl(train_jsonl, train_samples)
     write_jsonl(val_jsonl, val_samples)
+    write_jsonl(val_eval_jsonl, val_eval_entries)
 
     recipe = {
         "endovis_instruments": {
@@ -275,6 +297,7 @@ def main() -> None:
 
     print(f"Wrote {len(train_samples)} train samples: {train_jsonl}")
     print(f"Wrote {len(val_samples)} val samples: {val_jsonl}")
+    print(f"Wrote {len(val_eval_entries)} val eval samples: {val_eval_jsonl}")
     print(f"Wrote recipe: {recipe_path}")
     print(f"Referenced {total_frames} frames under: {image_root}")
     print(f"Frame stride: {args.frame_stride}")
