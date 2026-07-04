@@ -29,10 +29,23 @@ def load_coco_categories(coco_json_path: str) -> Dict:
     }
 
 
+def normalize_path(path: str) -> str:
+    return os.path.normpath(str(path)).replace("\\", "/")
+
+
 def build_image_path_to_id(coco_data: Dict) -> Dict[str, int]:
-    return {
-        os.path.basename(img["file_name"]): img["id"] for img in coco_data["images"]
-    }
+    path_to_id = {}
+    basename_to_ids = {}
+    for img in coco_data["images"]:
+        file_name = normalize_path(img["file_name"])
+        path_to_id[file_name] = img["id"]
+        basename_to_ids.setdefault(os.path.basename(file_name), set()).add(img["id"])
+
+    for basename, ids in basename_to_ids.items():
+        if len(ids) == 1:
+            path_to_id[basename] = next(iter(ids))
+
+    return path_to_id
 
 
 def parse_args():
@@ -93,7 +106,9 @@ def main():
             image_path = data.get("image_path") or os.path.join(
                 args.image_root, data.get("image_name", "")
             )
-            image_path = os.path.basename(image_path)
+            image_path = normalize_path(image_path)
+            if image_path not in image_path_to_id:
+                image_path = os.path.basename(image_path)
             if image_path not in image_path_to_id:
                 raise ValueError(f"Image path {image_path} not found in coco json")
             image_id = image_path_to_id[image_path]
