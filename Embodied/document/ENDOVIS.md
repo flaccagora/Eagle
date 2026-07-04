@@ -61,7 +61,8 @@ data/endovis_locany_single/
 ├── annotations/
 │   ├── endovis_train.jsonl       # training samples
 │   ├── endovis_val.jsonl         # validation samples in training format
-│   └── endovis_val_eval.jsonl    # validation samples for evaluation scripts
+│   ├── endovis_val_eval.jsonl    # validation samples for evaluation scripts
+│   └── endovis_val_coco.json     # validation GT for COCO AP/mAP
 ├── images/
 │   ├── 1_fps1/*.jpg
 │   ├── ...
@@ -278,6 +279,12 @@ The converter writes an evaluation JSONL:
 data/endovis_locany_single/annotations/endovis_val_eval.jsonl
 ```
 
+and a COCO-format validation annotation file:
+
+```text
+data/endovis_locany_single/annotations/endovis_val_coco.json
+```
+
 It uses:
 
 - `dataset_name=EndoVis`
@@ -318,6 +325,39 @@ The EndoVis evaluation uses `referring_object_detection`, so matching is
 category-agnostic after parsing predictions. This is appropriate for a
 collapsed single-class model.
 
+### COCO-Style AP/mAP
+
+To compute COCO-style AP/mAP, install the FastEvaluate dependency described in
+`evaluation/README.md`, then run:
+
+```bash
+cd Embodied
+
+GPUS=1 bash evaluation/scripts/eval_endovis_map.sh \
+  --model_path work_dirs/locany_lora_endovis_single/checkpoint-1000 \
+  --endovis_root ../data/endovis_locany_single \
+  --output_dir work_dirs/locany_lora_endovis_single/eval_val_map
+```
+
+This wraps the COCO/LVIS evaluation path:
+
+1. `inference_detection_ddp.py` generates predictions.
+2. `convert_coco_lvis_to_standard_format.py` converts predictions to FastEval TSV.
+3. `coco_lvis_metric.py` reports COCO-style AP/AR summaries.
+
+Outputs:
+
+```text
+work_dirs/locany_lora_endovis_single/eval_val_map/hybrid/
+├── eval_results.jsonl
+├── fast_eval.tsv
+└── evaluation_log_*.txt
+```
+
+For collapsed single-class EndoVis, `endovis_val_coco.json` contains one COCO
+category: `surgical instrument wrist`. AP is therefore single-class AP, not an
+average over the original EndoVis tool-type classes.
+
 ### Evaluate Multiple Checkpoints
 
 Example loop:
@@ -334,6 +374,20 @@ for ckpt in work_dirs/locany_lora_endovis_single/checkpoint-*; do
     --image_root ../data/endovis_locany_single/images \
     --test_jsonl ../data/endovis_locany_single/annotations/endovis_val_eval.jsonl \
     --output_dir "work_dirs/locany_lora_endovis_single/eval_${name}"
+done
+```
+
+AP/mAP loop:
+
+```bash
+cd Embodied
+
+for ckpt in work_dirs/locany_lora_endovis_single/checkpoint-*; do
+  name=$(basename "$ckpt")
+  GPUS=1 bash evaluation/scripts/eval_endovis_map.sh \
+    --model_path "$ckpt" \
+    --endovis_root ../data/endovis_locany_single \
+    --output_dir "work_dirs/locany_lora_endovis_single/eval_map_${name}"
 done
 ```
 

@@ -92,6 +92,56 @@ def absolute_box(bbox: list[float]) -> list[float]:
     return [x, y, x + w, y + h]
 
 
+def write_coco_json(path: Path, records: list[dict]) -> None:
+    category_names = sorted(
+        {ann["category_name"] for record in records for ann in record["annotations"]}
+    )
+    category_to_id = {name: idx + 1 for idx, name in enumerate(category_names)}
+
+    images = []
+    annotations = []
+    ann_id = 1
+    for image_id, record in enumerate(records, start=1):
+        images.append(
+            {
+                "id": image_id,
+                "width": record["width"],
+                "height": record["height"],
+                "file_name": record["file_name"],
+            }
+        )
+        for ann in record["annotations"]:
+            x, y, w, h = ann["bbox"]
+            annotations.append(
+                {
+                    "id": ann_id,
+                    "image_id": image_id,
+                    "category_id": category_to_id[ann["category_name"]],
+                    "bbox": [x, y, w, h],
+                    "area": float(w * h),
+                    "iscrowd": 0,
+                }
+            )
+            ann_id += 1
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "images": images,
+                "annotations": annotations,
+                "categories": [
+                    {"id": category_to_id[name], "name": name}
+                    for name in category_names
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def extract_frames(video_path: Path, output_dir: Path, frame_names: set[str], overwrite: bool) -> None:
     import cv2
 
@@ -131,7 +181,7 @@ def make_samples(
     collapse_class: bool,
     collapsed_label: str,
     frame_stride: int,
-) -> tuple[list[dict], set[str], list[dict]]:
+) -> tuple[list[dict], set[str], list[dict], list[dict]]:
     data = json.loads(coco_path.read_text())
     video_stem = coco_path.name.removesuffix("_coco.json")
     categories = {cat["id"]: cat["name"] for cat in data["categories"]}
@@ -144,6 +194,7 @@ def make_samples(
 
     samples = []
     eval_entries = []
+    coco_records = []
     frame_names = set()
     image_ids = sorted(
         anns_by_image,
@@ -162,12 +213,14 @@ def make_samples(
         instances = []
         gt_by_category: dict[str, list[list[float]]] = defaultdict(list)
         by_category: dict[str, list[tuple[int, int, int, int]]] = defaultdict(list)
+        coco_annotations = []
         for ann in anns:
             name = collapsed_label if collapse_class else categories[ann["category_id"]]
             box = convert_box(ann["bbox"], width, height)
             instances.append((name, box))
             by_category[name].append(box)
             gt_by_category[name].append(absolute_box(ann["bbox"]))
+            coco_annotations.append({"category_name": name, "bbox": ann["bbox"]})
 
         eval_entries.append(
             {
@@ -176,6 +229,14 @@ def make_samples(
                 "gt": {category: boxes for category, boxes in sorted(gt_by_category.items())},
                 "dataset_name": "EndoVis",
                 "task_name": "referring_object_detection",
+            }
+        )
+        coco_records.append(
+            {
+                "file_name": rel_image,
+                "width": width,
+                "height": height,
+                "annotations": coco_annotations,
             }
         )
 
@@ -216,7 +277,7 @@ def make_samples(
                     }
                 )
 
-    return samples, frame_names, eval_entries
+    return samples, frame_names, eval_entries, coco_records
 
 
 def write_jsonl(path: Path, samples: list[dict]) -> None:
@@ -245,6 +306,7 @@ def main() -> None:
     train_samples: list[dict] = []
     val_samples: list[dict] = []
     val_eval_entries: list[dict] = []
+    val_coco_records: list[dict] = []
     total_frames = 0
 
     coco_paths = sorted(glob.glob(str(endovis_dir / "*_fps1_coco.json")))
@@ -254,7 +316,7 @@ def main() -> None:
     for coco_str in coco_paths:
         coco_path = Path(coco_str)
         video_stem = coco_path.name.removesuffix("_coco.json")
-        samples, frame_names, eval_entries = make_samples(
+        samples, frame_names, eval_entries, coco_records = make_samples(
             coco_path,
             modes,
             collapse_class=args.collapse_class,
@@ -264,6 +326,7 @@ def main() -> None:
         if video_stem in val_videos:
             val_samples.extend(samples)
             val_eval_entries.extend(eval_entries)
+            val_coco_records.extend(coco_records)
         else:
             train_samples.extend(samples)
 
@@ -280,10 +343,12 @@ def main() -> None:
     train_jsonl = ann_dir / "endovis_train.jsonl"
     val_jsonl = ann_dir / "endovis_val.jsonl"
     val_eval_jsonl = ann_dir / "endovis_val_eval.jsonl"
+    val_coco_json = ann_dir / "endovis_val_coco.json"
     recipe_path = output_dir / "endovis_recipe.json"
     write_jsonl(train_jsonl, train_samples)
     write_jsonl(val_jsonl, val_samples)
     write_jsonl(val_eval_jsonl, val_eval_entries)
+    write_coco_json(val_coco_json, val_coco_records)
 
     recipe = {
         "endovis_instruments": {
@@ -298,6 +363,7 @@ def main() -> None:
     print(f"Wrote {len(train_samples)} train samples: {train_jsonl}")
     print(f"Wrote {len(val_samples)} val samples: {val_jsonl}")
     print(f"Wrote {len(val_eval_entries)} val eval samples: {val_eval_jsonl}")
+    print(f"Wrote val COCO AP annotations: {val_coco_json}")
     print(f"Wrote recipe: {recipe_path}")
     print(f"Referenced {total_frames} frames under: {image_root}")
     print(f"Frame stride: {args.frame_stride}")

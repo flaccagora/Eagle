@@ -75,6 +75,7 @@ mkdir -p "$OUTPUT_DIR"
 export NCCL_DEBUG=INFO
 export NCCL_IB_DISABLE=0
 export NCCL_NET_GDR_LEVEL=2
+export LOCANY_VISION_ATTN="${LOCANY_VISION_ATTN:-sdpa}"
 
 # ==================== Print Configuration ====================
 script_name=$(basename "${BASH_SOURCE[0]}")
