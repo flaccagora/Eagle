@@ -295,6 +295,8 @@ For the complete training guide (all arguments, data recipe format, multi-node s
 
 For data format details, annotation conventions, and recipe configuration, see **[Data Preparation](document/DATA_PREPARATION.md)**.
 
+For the EndoVis surgical-instrument adaptation workflow, including data extraction, single-class LoRA fine-tuning, offline W&B logging, Slurm launch, and validation evaluation, see **[EndoVis Fine-Tuning Guide](document/ENDOVIS.md)**.
+
 ### Visual Prompt Fine-Tuning
 
 We release visual prompt fine-tuning support for tasks where an image crop is used as the query instead of a category name. During training, datasets marked with `visual_prompt=true` automatically convert positive single-category detection prompts into cropped visual prompts from the source image. The source image remains the target image, and the crop is appended as an additional image placeholder.
